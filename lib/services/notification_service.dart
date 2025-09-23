@@ -9,6 +9,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:flutter_timezone/flutter_timezone.dart';
+import 'package:recoveryplus/utils/frequency_mapper.dart'; // Import FrequencyToTimeMapper
 
 /// Top-level background notification tap handler for flutter_local_notifications
 @pragma('vm:entry-point')
@@ -192,6 +193,43 @@ class NotificationService {
       debugPrint('❌ Error scheduling medication notification: $e');
       debugPrint('Stack trace: $stack');
     }
+  }
+
+  Future<void> scheduleMedicationsNotifications(List<Map<String, dynamic>> medications) async {
+    debugPrint('🔄 Scheduling notifications for ${medications.length} medications...');
+    int notificationIdCounter = 0; // Simple counter for unique IDs
+
+    for (var medData in medications) {
+      final String name = medData['name'] ?? 'Unknown Medication';
+      final String dosage = medData['dosage'] ?? '';
+      final String frequency = medData['frequency'] ?? '';
+
+      if (frequency.isNotEmpty) {
+        final List<TimeOfDay> times = FrequencyToTimeMapper.mapFrequencyToTimes(frequency);
+
+        if (times.isNotEmpty) {
+          for (var time in times) {
+            // Generate a unique ID for each notification
+            // Combine a base ID (e.g., hash of medication name) with a time-based component
+            // For simplicity, using a counter for now, but a more robust ID generation
+            // might be needed for persistent notifications across app restarts.
+            final int id = name.hashCode + time.hour * 100 + time.minute + notificationIdCounter++;
+
+            await scheduleMedicationReminder(
+              medicationName: name,
+              dosage: dosage,
+              time: time,
+              id: id,
+            );
+          }
+        } else {
+          debugPrint('⏭️ No specific times mapped for frequency: $frequency for $name');
+        }
+      } else {
+        debugPrint('⏭️ No frequency provided for medication: $name');
+      }
+    }
+    debugPrint('✅ Finished scheduling medication notifications.');
   }
 
   // APPOINTMENT REMINDER METHODS - DAILY AT FIXED TIME
@@ -408,7 +446,7 @@ class NotificationService {
     required TimeOfDay time,
   }) async {
     try {
-      final timeString = '${time.hour}:${time.minute.toString().padLeft(2, '0')}';
+      final timeString = '${time.hour.toString().padLeft(2, '0')}:${time.minute.toString().padLeft(2, '0')}';
       final id = '$docId-$timeString'.hashCode;
       final scheduledDate = _nextInstanceOfTime(time.hour, time.minute);
       final AndroidNotificationDetails androidDetails =

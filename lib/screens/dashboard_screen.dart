@@ -6,7 +6,6 @@ import 'package:recoveryplus/screens/exercise_screen.dart';
 import 'package:recoveryplus/screens/medication_screen.dart';
 import 'package:recoveryplus/screens/profile_screen.dart';
 import 'package:recoveryplus/screens/appointments_screen.dart';
-// import 'package:recoveryplus/theme/app_theme.dart'; // No longer directly using AppTheme
 import 'package:image_picker/image_picker.dart';
 import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:http/http.dart' as http; // Import http package
@@ -14,7 +13,11 @@ import 'dart:convert'; // Import dart:convert for json operations
 import 'package:flutter_dotenv/flutter_dotenv.dart'; // Import dotenv for backend URL
 import 'package:recoveryplus/services/database_service.dart';
 import 'package:recoveryplus/widgets/pain_tracker.dart';
+import 'package:recoveryplus/services/notification_service.dart';
 import 'package:recoveryplus/widgets/recovery_progress.dart';
+import 'package:image/image.dart' as img; // Import image package
+import 'dart:io'; // Import dart:io for File operations
+import 'package:path_provider/path_provider.dart'; // Import path_provider for temporary directory
 
 class DashboardScreen extends StatefulWidget {
   @override
@@ -553,45 +556,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _pickImageAndProcessPrescription() async {
     print("DashboardScreen: _pickImageAndProcessPrescription started.");
     final ImagePicker picker = ImagePicker();
-    final XFile? image = await picker.pickImage(source: ImageSource.gallery);
+    final XFile? pickedFile = await picker.pickImage(source: ImageSource.gallery);
 
-    if (image == null) {
+    if (pickedFile == null) {
       print("DashboardScreen: Image picking cancelled.");
       return;
     }
 
-    print("DashboardScreen: Image picked successfully: ${image.path}");
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Processing prescription...')),
-    );
+    print("DashboardScreen: Image picked successfully: ${pickedFile.path}");
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Processing prescription...')),
+      );
+    }
 
     try {
-      final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
-      final InputImage inputImage = InputImage.fromFilePath(image.path);
-      print("DashboardScreen: Starting text recognition...");
-      final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
-      String extractedText = recognizedText.text;
-      print("DashboardScreen: Text recognized: $extractedText");
-
-      if (extractedText.isEmpty) {
-        print("DashboardScreen: No text found in the image.");
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('No text found in the image.')),
-        );
-        return;
-      }
-
       final String backendUrl = dotenv.env['BACKEND_URL']!;
       print("DashboardScreen: Calling Python backend at $backendUrl/process_prescription...");
-      final response = await http.post(
-        Uri.parse('$backendUrl/process_prescription'),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"prescription_text": extractedText}),
-      );
+      
+      var request = http.MultipartRequest('POST', Uri.parse('$backendUrl/process_prescription'));
+      request.files.add(await http.MultipartFile.fromPath('image', pickedFile.path));
+
+      final response = await request.send();
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> structuredData = jsonDecode(response.body);
-        print("DashboardScreen: Backend call successful. Structured Data: $structuredData");
+        final responseBody = await response.stream.bytesToString();
+        final Map<String, dynamic> structuredData = jsonDecode(responseBody);
+        print('DashboardScreen: Backend call successful. Structured Data: $structuredData');
 
         final List<dynamic> medicationsData = structuredData['medications'] ?? [];
         final List<dynamic> exercisesData = structuredData['exercises'] ?? [];
@@ -601,42 +592,54 @@ class _DashboardScreenState extends State<DashboardScreen> {
             await _databaseService!.addMedication(
               medData['name'] ?? '',
               medData['dosage'] ?? '',
-              medData['frequency'] ?? '',
+              (medData['timings'] as List<dynamic>).cast<String>(), // Expect timings directly from backend
             );
-            print("DashboardScreen: Medication added to Firebase: ${medData['name']}");
+            print("DashboardScreen: Medication added to Firebase: ${medData['name']} with timings: ${medData['timings']}");
           }
         }
 
         for (var exData in exercisesData) {
           if (_databaseService != null) {
-            await _databaseService!.addExercise(
-              exData['name'] ?? '',
-              exData['duration'] ?? '',
-              exData['frequency'] ?? ''
-            );
+            // await _databaseService!.addExercise(
+            //   exData['name'] ?? '',
+            //   exData['duration'] ?? '',
+            //   exData['frequency'] ?? '',
+            //   exData['category'] ?? ''
+            // );
             print("DashboardScreen: Exercise added to Firebase: ${exData['name']}");
           }
         }
 
-        setState(() {});
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Prescription processed successfully!')),
-        );
+        if (mounted) {
+          setState(() {});
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Prescription processed successfully!')),
+          );
+          // Add navigation to MedicationScreen
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => MedicationScreen()),
+          );
+        }
         print("DashboardScreen: Prescription processed successfully.");
 
       } else {
-        print("DashboardScreen: Backend Error: Status Code ${response.statusCode}, Body: ${response.body}");
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error processing prescription: ${response.statusCode} - ${response.body}')),
-        );
+        final responseBody = await response.stream.bytesToString();
+        print("DashboardScreen: Backend Error: Status Code ${response.statusCode}, Body: $responseBody");
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error processing prescription: ${response.statusCode} - $responseBody')),
+          );
+        }
       }
 
     } catch (e, stackTrace) {
       print("DashboardScreen: Error processing prescription: $e\n$stackTrace");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error processing prescription: $e')),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error processing prescription: $e')),
+        );
+      }
     }
   }
 }

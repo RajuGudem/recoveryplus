@@ -1,0 +1,51 @@
+
+[
+  {
+    "title": "Heel Slides",
+    "description": "Lie on your back with your knees bent. Slowly slide the heel of your operated leg down until your leg is straight. Then, slide it back up to the starting position.",
+    "category": "Knee Replacement",
+    "surgeryType": "Knee Replacement",
+    "frequency": "3 times a day",
+    "time": "10 repetitions"
+  },
+  {
+    "title": "Ankle Pumps",
+    "description": "Lie on your back and gently point and flex your ankles. This helps to improve circulation in your legs.",
+    "category": "Hip Replacement",
+    "surgeryType": "Hip Replacement",
+    "frequency": "Every hour while awake",
+    "time": "10-15 repetitions"
+  },
+  {
+    "title": "Pendulum Swings",
+    "description": "Lean forward and support your good arm on a table. Let your other arm hang down and gently swing it in small circles.",
+    "category": "Shoulder Surgery",
+    "surgeryType": "Shoulder Surgery",
+    "frequency": "3-4 times a day",
+    "time": "1-2 minutes"
+  },
+  {
+    "title": "Abdominal Bracing",
+    "description": "Lie on your back with your knees bent. Tighten your abdominal muscles as if you are about to be punched in the stomach. Hold for 5 seconds and then relax.",
+    "category": "Spinal Fusion",
+    "surgeryType": "Spinal Fusion",
+    "frequency": "5 times a day",
+    "time": "10 repetitions"
+  },
+  {
+    "title": "Quad Sets",
+    "description": "Lie on your back with your leg straight. Tighten the muscle on the top of your thigh by pushing the back of your knee into the floor. Hold for 5 seconds and then relax.",
+    "category": "ACL Reconstruction",
+    "surgeryType": "ACL Reconstruction",
+    "frequency": "3 times a day",
+    "time": "10 repetitions"
+  },
+  {
+    "title": "Deep Breathing",
+    "description": "Sit or lie down in a comfortable position. Inhale slowly through your nose, allowing your chest and belly to expand. Exhale slowly through your mouth. This helps to improve lung capacity and promote relaxation.",
+    "category": "General",
+    "surgeryType": "General",
+    "frequency": "5-10 times a day",
+    "time": "5 repetitions"
+  }
+]

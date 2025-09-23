@@ -42,6 +42,7 @@ class RecoveryPlusApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    debugPrint('Building RecoveryPlusApp');
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
         final baseLight = AppTheme.lightTheme;

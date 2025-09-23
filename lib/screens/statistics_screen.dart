@@ -322,6 +322,9 @@ class StatisticsScreenState extends State<StatisticsScreen> {
     final exercises = _statistics['exercises'] as Map<String, dynamic>?;
     if (exercises == null || exercises.isEmpty) return SizedBox();
 
+    final exercisesByCategory = exercises['exercises_by_category'] as Map<String, dynamic>? ?? {};
+    final exercisesBySurgeryType = exercises['exercises_by_surgery_type'] as Map<String, dynamic>? ?? {};
+
     return Card(
       color: colorScheme.surface,
       elevation: 3,
@@ -345,6 +348,30 @@ class StatisticsScreenState extends State<StatisticsScreen> {
             _buildStatRow('Level', exercises['completion_level'] ?? 'No data', colorScheme, textTheme),
             _buildStatRow('Completed', '${exercises['completed_exercises']} / ${exercises['total_exercises']}', colorScheme, textTheme),
             _buildStatRow('Pending', '${exercises['pending_exercises']}', colorScheme, textTheme),
+            _buildStatRow('Most Frequent Category', exercises['most_frequent_category'] ?? 'N/A', colorScheme, textTheme),
+            _buildStatRow('Total Time', '${exercises['total_time_minutes'] ?? 0} minutes', colorScheme, textTheme),
+            if (exercisesByCategory.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 12.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('By Category:', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold)),
+                    ...exercisesByCategory.entries.map((entry) => _buildStatRow(entry.key, entry.value.toString(), colorScheme, textTheme)),
+                  ],
+                ),
+              ),
+            if (exercisesBySurgeryType.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 12.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('By Surgery Type:', style: textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold)),
+                    ...exercisesBySurgeryType.entries.map((entry) => _buildStatRow(entry.key, entry.value.toString(), colorScheme, textTheme)),
+                  ],
+                ),
+              ),
           ],
         ),
       ),

@@ -65,7 +65,7 @@ class DatabaseService {
   Future<String> addMedication(
     String medication,
     String dosage,
-    String time,
+    List<String> timings,
   ) async {
     print("DatabaseService: Attempting to add medication: $medication for UID: $uid");
     try {
@@ -74,7 +74,7 @@ class DatabaseService {
       final docRef = await recoveryCollection.doc(uid).collection('medications').add({
         'medication': medication,
         'dosage': dosage,
-        'time': time,
+        'timings': timings,
         'taken': false,
         'createdAt': FieldValue.serverTimestamp(),
       });
@@ -135,39 +135,52 @@ class DatabaseService {
 
   // 4. EXERCISE OPERATIONS
   // Exercise-related methods
-  Future<void> addExercise(String name, String duration, String frequency) async {
-    print("DatabaseService: Attempting to add exercise: $name (Duration: $duration, Frequency: $frequency) for UID: $uid");
+  Future<void> addExercise(String title, String description, String category, String surgeryType, String frequency, String time, {String? addedBy}) async {
+    print("DatabaseService: Attempting to add exercise: $title for UID: $uid");
     try {
       if (uid == null) throw Exception('User not authenticated');
 
       await recoveryCollection.doc(uid).collection('exercises').add({
-        'name': name,
-        'duration': duration,
+        'title': title,
+        'description': description,
+        'category': category,
+        'surgeryType': surgeryType,
+        'addedBy': addedBy ?? uid, // Use provided addedBy or default to uid
         'frequency': frequency,
+        'time': time,
         'completed': false,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
-      print('DatabaseService: Exercise added successfully: $name for UID: $uid');
+      print('DatabaseService: Exercise added successfully: $title for UID: $uid');
     } catch (error, stackTrace) {
-      print("DatabaseService: Error adding exercise: $name for UID: $uid - $error\n$stackTrace");
+      print("DatabaseService: Error adding exercise: $title for UID: $uid - $error\n$stackTrace");
       rethrow;
     }
   }
 
-  Future<void> updateExerciseStatus(String docId, bool completed) async {
-    print("DatabaseService: Attempting to update exercise status for docId: $docId to completed: $completed for UID: $uid");
+  Future<void> updateExerciseStatus(String docId, DateTime? lastCompletedDate) async {
+    print("DatabaseService: Attempting to update exercise status for docId: $docId with lastCompletedDate: $lastCompletedDate for UID: $uid");
     try {
       if (uid == null) throw Exception('User not authenticated');
+
+      Map<String, dynamic> updateData = {
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (lastCompletedDate != null) {
+        updateData['lastCompletedDate'] = lastCompletedDate;
+        updateData['completed'] = true;
+      } else {
+        updateData['lastCompletedDate'] = FieldValue.delete();
+        updateData['completed'] = false;
+      }
 
       await recoveryCollection
           .doc(uid)
           .collection('exercises')
           .doc(docId)
-          .update({
-            'completed': completed,
-            'updatedAt': FieldValue.serverTimestamp(),
-          });
+          .update(updateData);
 
       print('DatabaseService: Exercise status updated successfully for docId: $docId');
     } catch (error, stackTrace) {
@@ -203,6 +216,26 @@ class DatabaseService {
         .orderBy('createdAt', descending: true)
         .snapshots();
   }
+  Stream<QuerySnapshot> getGeneralExercises() {
+    if (uid == null) throw Exception('User not authenticated');
+
+    return recoveryCollection
+        .doc(uid)
+        .collection('exercises')
+        .where('surgeryType', isEqualTo: 'General')
+        .snapshots();
+  }
+
+  // Method to get exercises filtered by surgery type
+  Stream<QuerySnapshot> getExercisesBySurgeryType(String surgeryType) {
+    if (uid == null) throw Exception('User not authenticated');
+
+    return recoveryCollection
+        .doc(uid)
+        .collection('exercises')
+        .where('surgeryType', isEqualTo: surgeryType)
+        .snapshots();
+  }
 
   // 5. REAL-TIME STREAMS
   Stream<DocumentSnapshot> get userData {
@@ -225,13 +258,6 @@ class DatabaseService {
         .snapshots();
   }
 
-  Stream<QuerySnapshot> get exercises {
-    return recoveryCollection
-        .doc(uid)
-        .collection('exercises')
-        .orderBy('createdAt', descending: true)
-        .snapshots();
-  }
 
   Stream<QuerySnapshot> getExercisesByPhase(String phase) {
     return recoveryCollection

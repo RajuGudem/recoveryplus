@@ -23,6 +23,8 @@ class MedicationScreenState extends State<MedicationScreen> {
   bool _isLoading = false;
   User? _user;
   DatabaseService? _databaseService;
+  final _searchController = TextEditingController();
+  String _searchQuery = '';
 
   // Services
   late final NotificationService _notificationService;
@@ -33,6 +35,11 @@ class MedicationScreenState extends State<MedicationScreen> {
     super.initState();
     _notificationService = NotificationService();
     _initializeServices();
+    _searchController.addListener(() {
+      setState(() {
+        _searchQuery = _searchController.text;
+      });
+    });
   }
 
   Future<void> _initializeServices() async {
@@ -56,7 +63,13 @@ class MedicationScreenState extends State<MedicationScreen> {
         foregroundColor: colorScheme.onPrimary,
         elevation: 0,
         iconTheme: IconThemeData(color: colorScheme.onPrimary),
-        actions: [],
+        actions: [
+          IconButton(
+            icon: Icon(Icons.delete_sweep, color: colorScheme.onPrimary),
+            onPressed: _clearAllMedications,
+            tooltip: 'Clear all medications',
+          ),
+        ],
       ),
       body: _user == null
           ? _buildAuthRequiredScreen(colorScheme, textTheme)
@@ -252,30 +265,58 @@ class MedicationScreenState extends State<MedicationScreen> {
       return Center(child: CircularProgressIndicator(color: colorScheme.primary));
     }
 
-    return StreamBuilder<QuerySnapshot>(
-      stream: _databaseService!.medicationsStream,
-      builder: (context, snapshot) {
-        if (snapshot.hasError) {
-          return Center(child: Text('Error loading medications', style: textTheme.bodyLarge?.copyWith(color: colorScheme.error)));
-        }
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator(color: colorScheme.primary));
-        }
-        final medications = snapshot.data?.docs ?? [];
-        if (medications.isEmpty) {
-          return _buildEmptyState(colorScheme, textTheme);
-        }
-        return ListView.builder(
-          padding: const EdgeInsets.all(16),
-          itemCount: medications.length,
-          itemBuilder: (context, index) {
-            final medication = medications[index];
-            final data = medication.data() as Map<String, dynamic>;
-            final isTaken = data['taken'] ?? false;
-            return _buildMedicationCard(medication.id, data, isTaken, colorScheme, textTheme);
-          },
-        );
+    return RefreshIndicator(
+      onRefresh: () async {
+        setState(() {});
       },
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                labelText: 'Search Medications',
+                prefixIcon: Icon(Icons.search),
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ),
+          Expanded(
+            child: StreamBuilder<QuerySnapshot>(
+              stream: _databaseService!.medicationsStream,
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Center(child: Text('Error loading medications', style: textTheme.bodyLarge?.copyWith(color: colorScheme.error)));
+                }
+                if (snapshot.connectionState == ConnectionState.waiting) {
+                  return Center(child: CircularProgressIndicator(color: colorScheme.primary));
+                }
+                final medications = snapshot.data?.docs.where((doc) {
+                  final data = doc.data() as Map<String, dynamic>;
+                  final medicationName = data['medication'] as String? ?? '';
+                  return medicationName.toLowerCase().contains(_searchQuery.toLowerCase());
+                }).toList() ?? [];
+
+                if (medications.isEmpty) {
+                  return _buildEmptyState(colorScheme, textTheme);
+                }
+
+                return ListView.builder(
+                  padding: const EdgeInsets.all(16),
+                  itemCount: medications.length,
+                  itemBuilder: (context, index) {
+                    final medication = medications[index];
+                    final data = medication.data() as Map<String, dynamic>;
+                    final isTaken = data['taken'] ?? false;
+                    return _buildMedicationCard(medication.id, data, isTaken, colorScheme, textTheme);
+                  },
+                );
+              },
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -360,7 +401,7 @@ class MedicationScreenState extends State<MedicationScreen> {
               style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface.withAlpha((0.8 * 255).toInt())),
             ),
             Text(
-              'Time: ${data['time'] ?? ''}',
+              'Time: ${(data['timings'] as List<dynamic>?)?.join(', ') ?? ''}',
               maxLines: 3,
               overflow: TextOverflow.ellipsis,
               style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface.withAlpha((0.8 * 255).toInt())),
@@ -449,7 +490,7 @@ class MedicationScreenState extends State<MedicationScreen> {
       final docId = await _databaseService!.addMedication(
         _medicationController.text.trim(),
         _dosageController.text.trim(),
-        _timeController.text.trim(),
+        [_timeController.text.trim()], // Wrap the single time string in a list
       );
       debugPrint('[MedicationScreen] Scheduling notification for medication: ${_medicationController.text.trim()}');
       await _notificationService.scheduleBackgroundCompatibleReminder(
@@ -482,45 +523,40 @@ class MedicationScreenState extends State<MedicationScreen> {
 
   Future<void> _deleteMedication(String docId) async {
     if (_databaseService == null) return;
-    showDialog(
+
+    final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: Theme.of(context).colorScheme.surface,
-        title: Text('Delete Medication', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Theme.of(context).colorScheme.onSurface)),
-        content: Text('Are you sure you want to delete this medication?', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurface)),
+        title: const Text('Delete Medication'),
+        content: const Text('Are you sure you want to delete this medication?'),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
-            style: TextButton.styleFrom(
-              foregroundColor: Theme.of(context).colorScheme.primary,
-            ),
-            child: Text('Cancel', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: Theme.of(context).colorScheme.primary)),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
           ),
           TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              try {
-                final notificationId = _medicationNotificationIds[docId];
-                if (notificationId != null) {
-                  debugPrint('[MedicationScreen] Cancelling notification with id: $notificationId');
-                  await _notificationService.cancelNotification(notificationId);
-                  debugPrint('[MedicationScreen] Notification with id: $notificationId cancelled.');
-                  _medicationNotificationIds.remove(docId);
-                }
-                await _databaseService!.deleteMedication(docId);
-                _showSuccess('Medication deleted successfully');
-              } catch (error) {
-                _showError('Failed to delete medication: $error');
-              }
-            },
-            style: TextButton.styleFrom(
-              foregroundColor: Theme.of(context).colorScheme.error,
-            ),
-            child: Text('Delete', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: Theme.of(context).colorScheme.error)),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
           ),
         ],
       ),
     );
+
+    if (result ?? false) {
+      try {
+        final notificationId = _medicationNotificationIds[docId];
+        if (notificationId != null) {
+          debugPrint('[MedicationScreen] Cancelling notification with id: $notificationId');
+          await _notificationService.cancelNotification(notificationId);
+          debugPrint('[MedicationScreen] Notification with id: $notificationId cancelled.');
+          _medicationNotificationIds.remove(docId);
+        }
+        await _databaseService!.deleteMedication(docId);
+        _showSuccess('Medication deleted successfully');
+      } catch (error) {
+        _showError('Failed to delete medication: $error');
+      }
+    }
   }
 
   void _showSuccess(String message) {
@@ -559,6 +595,40 @@ class MedicationScreenState extends State<MedicationScreen> {
   String _formatDate(DateTime? date) {
     if (date == null) return '';
     return '${date.day}/${date.month}/${date.year}';
+  }
+
+  Future<void> _clearAllMedications() async {
+    if (_databaseService == null) return;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear All Medications'),
+        content: const Text('Are you sure you want to delete all medications?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Clear All'),
+          ),
+        ],
+      ),
+    );
+
+    if (result ?? false) {
+      try {
+        final medications = await _databaseService!.medicationsStream.first;
+        for (final doc in medications.docs) {
+          await _databaseService!.deleteMedication(doc.id);
+        }
+        _showSuccess('All medications cleared');
+      } catch (error) {
+        _showError('Failed to clear medications: $error');
+      }
+    }
   }
 
   @override

@@ -2,24 +2,36 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:recoveryplus/services/database_service.dart';
+import 'package:flutter/services.dart';
+import 'dart:convert';
 
 class ExerciseScreen extends StatefulWidget {
-  const ExerciseScreen({Key? key}) : super(key: key);
+  const ExerciseScreen({super.key});
 
   @override
-  ExerciseScreenState createState() => ExerciseScreenState();
+  State<ExerciseScreen> createState() => _ExerciseScreenState();
 }
 
-class ExerciseScreenState extends State<ExerciseScreen> {
-  final _formKey = GlobalKey<FormState>();
-  final _exerciseNameController = TextEditingController();
-  final _durationController = TextEditingController();
-  final _frequencyController = TextEditingController();
-
-  bool _showForm = false;
-  bool _isLoading = false;
-  User? _user;
+class _ExerciseScreenState extends State<ExerciseScreen> {
   DatabaseService? _databaseService;
+  User? _user;
+  String? _surgeryType;
+  Stream<QuerySnapshot>? _exerciseStream;
+  bool _showForm = false;
+  final _formKey = GlobalKey<FormState>();
+  final _titleController = TextEditingController();
+  final _descriptionController = TextEditingController();
+  final _frequencyController = TextEditingController();
+  final _timeController = TextEditingController();
+  bool _isLoading = false;
+  String? _selectedCategory;
+  final List<String> _exerciseCategories = [
+    'Range of Motion',
+    'Strengthening',
+    'Balance',
+    'Flexibility',
+    'Endurance'
+  ];
 
   @override
   void initState() {
@@ -28,15 +40,74 @@ class ExerciseScreenState extends State<ExerciseScreen> {
   }
 
   Future<void> _initializeServices() async {
-    print("ExerciseScreen: Initializing services...");
     _user = FirebaseAuth.instance.currentUser;
     if (_user != null) {
       _databaseService = DatabaseService(uid: _user!.uid);
-      print("ExerciseScreen: DatabaseService initialized for user: ${_user!.uid}");
-    } else {
-      print("ExerciseScreen: User not authenticated.");
+      await _loadUserData();
     }
-    setState(() {});
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _loadUserData() async {
+    if (_databaseService == null) return;
+    final userData = await _databaseService!.getUserData();
+    if (userData.exists) {
+      if (mounted) {
+        setState(() {
+          _surgeryType = userData.get('surgeryType');
+        });
+      }
+    }
+
+    if (_surgeryType != null) {
+      // Check if exercises for this surgery type have already been copied
+      final userExercisesSnapshot = await _databaseService!
+          .recoveryCollection
+          .doc(_user!.uid)
+          .collection('exercises')
+          .where('surgeryType', isEqualTo: _surgeryType)
+          .where('addedBy', isEqualTo: 'system') // Check for system-added exercises
+          .get();
+
+      if (userExercisesSnapshot.docs.isEmpty) {
+        // If not, fetch from the global collection and copy them over
+        final globalExercisesSnapshot = await FirebaseFirestore.instance
+            .collection('exercises')
+            .where('surgeryType', isEqualTo: _surgeryType)
+            .get();
+
+        print("Found ${globalExercisesSnapshot.docs.length} global exercises for surgery type: $_surgeryType. Copying now...");
+
+        for (var exerciseDoc in globalExercisesSnapshot.docs) {
+          final exerciseData = exerciseDoc.data();
+          await _databaseService!.addExercise(
+            exerciseData['title'] ?? '',
+            exerciseData['description'] ?? '',
+            exerciseData['category'] ?? '',
+            exerciseData['surgeryType'] ?? '',
+            exerciseData['frequency'] ?? '',
+            exerciseData['time'] ?? '',
+            addedBy: 'system', // Pass the special value
+          );
+        }
+      }
+    }
+
+    // Set the stream to the user's subcollection
+    if (mounted) {
+      setState(() {
+        if (_surgeryType != null && _databaseService != null) {
+          _exerciseStream =
+              _databaseService!.getExercisesBySurgeryType(_surgeryType!);
+        } else if (_databaseService != null) {
+          _exerciseStream = _databaseService!.getGeneralExercises();
+        } else {
+          _exerciseStream = Stream.empty();
+        }
+      });
+    }
   }
 
   @override
@@ -53,43 +124,84 @@ class ExerciseScreenState extends State<ExerciseScreen> {
       ),
       body: _user == null
           ? _buildAuthRequiredScreen(colorScheme, textTheme)
-          : Column(
-              children: [
-                if (_showForm) _buildAddExerciseForm(colorScheme, textTheme),
-                Expanded(child: _buildExerciseList(colorScheme, textTheme)),
-              ],
+          : SingleChildScrollView(
+              child: Column(
+                children: [
+                  if (_surgeryType != null)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      margin: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: colorScheme.secondaryContainer,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        'Exercises for: $_surgeryType',
+                        textAlign: TextAlign.center,
+                        style: textTheme.titleMedium?.copyWith(
+                          color: colorScheme.onSecondaryContainer,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  if (_showForm) _buildAddExerciseForm(colorScheme, textTheme),
+                  _buildExerciseList(colorScheme, textTheme),
+                ],
+              ),
             ),
       floatingActionButton: _user != null
-          ? FloatingActionButton(
-              backgroundColor: colorScheme.primary,
-              foregroundColor: colorScheme.onPrimary,
-              onPressed: _toggleFormVisibility,
-              tooltip: _showForm ? 'Close form' : 'Add exercise',
-              child: Icon(_showForm ? Icons.close : Icons.add),
+          ? Column(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                FloatingActionButton(
+                  heroTag: "addExerciseBtn",
+                  backgroundColor: colorScheme.primary,
+                  foregroundColor: colorScheme.onPrimary,
+                  onPressed: _toggleFormVisibility,
+                  tooltip: _showForm ? 'Close form' : 'Add exercise',
+                  child: Icon(_showForm ? Icons.close : Icons.add),
+                ),
+                const SizedBox(height: 10),
+                FloatingActionButton(
+                  heroTag: "debugExerciseBtn",
+                  backgroundColor: colorScheme.secondary,
+                  foregroundColor: colorScheme.onSecondary,
+                  onPressed: _printDebugInfo,
+                  tooltip: 'Debug Info',
+                  child: const Icon(Icons.bug_report),
+                ),
+              ],
             )
           : null,
     );
   }
 
-  Widget _buildAuthRequiredScreen(ColorScheme colorScheme, TextTheme textTheme) {
+  void _printDebugInfo() async {
+    // TODO: Implement debug info printing
+    print("Debug info requested.");
+  }
+  Widget _buildAuthRequiredScreen(
+      ColorScheme colorScheme, TextTheme textTheme) {
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(Icons.error_outline, size: 64, color: colorScheme.secondary),
-          SizedBox(height: 20),
+          const SizedBox(height: 20),
           Text(
             'Authentication Required',
-            style: textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold, color: colorScheme.onSurface),
+            style: textTheme.headlineSmall
+                ?.copyWith(fontWeight: FontWeight.bold, color: colorScheme.onSurface),
           ),
-          SizedBox(height: 10),
+          const SizedBox(height: 10),
           Text(
             'Please sign in to manage exercises',
             style: textTheme.bodyMedium?.copyWith(
               color: colorScheme.onSurface.withAlpha((0.7 * 255).toInt()),
             ),
           ),
-          SizedBox(height: 20),
+          const SizedBox(height: 20),
           ElevatedButton(
             onPressed: _initializeServices,
             style: ElevatedButton.styleFrom(
@@ -123,11 +235,15 @@ class ExerciseScreenState extends State<ExerciseScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              _buildExerciseNameField(colorScheme, textTheme),
+              _buildTitleField(colorScheme, textTheme),
               const SizedBox(height: 12),
-              _buildDurationField(colorScheme, textTheme),
+              _buildCategoryDropdown(colorScheme, textTheme),
+              const SizedBox(height: 12),
+              _buildDescriptionField(colorScheme, textTheme),
               const SizedBox(height: 12),
               _buildFrequencyField(colorScheme, textTheme),
+              const SizedBox(height: 12),
+              _buildTimeField(colorScheme, textTheme),
               const SizedBox(height: 16),
               _buildFormButtons(colorScheme, textTheme),
             ],
@@ -137,49 +253,91 @@ class ExerciseScreenState extends State<ExerciseScreen> {
     );
   }
 
-  Widget _buildExerciseNameField(ColorScheme colorScheme, TextTheme textTheme) {
-    return TextFormField(
-      controller: _exerciseNameController,
+  Widget _buildCategoryDropdown(ColorScheme colorScheme, TextTheme textTheme) {
+    return DropdownButtonFormField<String>(
+      initialValue: _selectedCategory,
       decoration: InputDecoration(
-        labelText: 'Exercise Name',
+        labelText: 'Category',
         border: const OutlineInputBorder(),
         filled: true,
         fillColor: colorScheme.surface.withAlpha((0.95 * 255).toInt()),
-        prefixIcon: Icon(Icons.fitness_center, color: colorScheme.onSurface.withAlpha((0.7 * 255).toInt())),
-        labelStyle: textTheme.labelLarge?.copyWith(color: colorScheme.onSurface.withAlpha((0.7 * 255).toInt())),
+        prefixIcon: Icon(Icons.category,
+            color: colorScheme.onSurface.withAlpha((0.7 * 255).toInt())),
+        labelStyle: textTheme.labelLarge
+            ?.copyWith(color: colorScheme.onSurface.withAlpha((0.7 * 255).toInt())),
         focusedBorder: OutlineInputBorder(
           borderSide: BorderSide(color: colorScheme.primary),
         ),
         enabledBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: colorScheme.outline.withAlpha((0.4 * 255).toInt())),
+          borderSide: BorderSide(
+              color: colorScheme.outline.withAlpha((0.4 * 255).toInt())),
+        ),
+      ),
+      items: _exerciseCategories.map((String category) {
+        return DropdownMenuItem<String>(
+          value: category,
+          child: Text(category),
+        );
+      }).toList(),
+      onChanged: (newValue) {
+        setState(() {
+          _selectedCategory = newValue;
+        });
+      },
+      validator: (value) => value == null ? 'Please select a category' : null,
+    );
+  }
+
+  Widget _buildTitleField(ColorScheme colorScheme, TextTheme textTheme) {
+    return TextFormField(
+      controller: _titleController,
+      decoration: InputDecoration(
+        labelText: 'Title',
+        border: const OutlineInputBorder(),
+        filled: true,
+        fillColor: colorScheme.surface.withAlpha((0.95 * 255).toInt()),
+        prefixIcon: Icon(Icons.fitness_center,
+            color: colorScheme.onSurface.withAlpha((0.7 * 255).toInt())),
+        labelStyle: textTheme.labelLarge
+            ?.copyWith(color: colorScheme.onSurface.withAlpha((0.7 * 255).toInt())),
+        focusedBorder: OutlineInputBorder(
+          borderSide: BorderSide(color: colorScheme.primary),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderSide: BorderSide(
+              color: colorScheme.outline.withAlpha((0.4 * 255).toInt())),
         ),
       ),
       validator: (value) =>
-          value?.isEmpty ?? true ? 'Please enter exercise name' : null,
+          value?.isEmpty ?? true ? 'Please enter a title' : null,
       style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface),
     );
   }
 
-  Widget _buildDurationField(ColorScheme colorScheme, TextTheme textTheme) {
+  Widget _buildDescriptionField(ColorScheme colorScheme, TextTheme textTheme) {
     return TextFormField(
-      controller: _durationController,
+      controller: _descriptionController,
       decoration: InputDecoration(
-        labelText: 'Duration (e.g., 30 mins, 3 sets)',
+        labelText: 'Description',
         border: const OutlineInputBorder(),
         filled: true,
         fillColor: colorScheme.surface.withAlpha((0.95 * 255).toInt()),
-        prefixIcon: Icon(Icons.timer, color: colorScheme.onSurface.withAlpha((0.7 * 255).toInt())),
-        labelStyle: textTheme.labelLarge?.copyWith(color: colorScheme.onSurface.withAlpha((0.7 * 255).toInt())),
+        prefixIcon: Icon(Icons.notes,
+            color: colorScheme.onSurface.withAlpha((0.7 * 255).toInt())),
+        labelStyle: textTheme.labelLarge
+            ?.copyWith(color: colorScheme.onSurface.withAlpha((0.7 * 255).toInt())),
         focusedBorder: OutlineInputBorder(
           borderSide: BorderSide(color: colorScheme.primary),
         ),
         enabledBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: colorScheme.outline.withAlpha((0.4 * 255).toInt())),
+          borderSide: BorderSide(
+              color: colorScheme.outline.withAlpha((0.4 * 255).toInt())),
         ),
       ),
       validator: (value) =>
-          value?.isEmpty ?? true ? 'Please enter duration' : null,
+          value?.isEmpty ?? true ? 'Please enter a description' : null,
       style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface),
+      maxLines: 3,
     );
   }
 
@@ -187,21 +345,50 @@ class ExerciseScreenState extends State<ExerciseScreen> {
     return TextFormField(
       controller: _frequencyController,
       decoration: InputDecoration(
-        labelText: 'Frequency (e.g., Daily, 3 times a week)',
+        labelText: 'Frequency',
         border: const OutlineInputBorder(),
         filled: true,
         fillColor: colorScheme.surface.withAlpha((0.95 * 255).toInt()),
-        prefixIcon: Icon(Icons.repeat, color: colorScheme.onSurface.withAlpha((0.7 * 255).toInt())),
-        labelStyle: textTheme.labelLarge?.copyWith(color: colorScheme.onSurface.withAlpha((0.7 * 255).toInt())),
+        prefixIcon: Icon(Icons.repeat,
+            color: colorScheme.onSurface.withAlpha((0.7 * 255).toInt())),
+        labelStyle: textTheme.labelLarge
+            ?.copyWith(color: colorScheme.onSurface.withAlpha((0.7 * 255).toInt())),
         focusedBorder: OutlineInputBorder(
           borderSide: BorderSide(color: colorScheme.primary),
         ),
         enabledBorder: OutlineInputBorder(
-          borderSide: BorderSide(color: colorScheme.outline.withAlpha((0.4 * 255).toInt())),
+          borderSide: BorderSide(
+              color: colorScheme.outline.withAlpha((0.4 * 255).toInt())),
         ),
       ),
       validator: (value) =>
-          value?.isEmpty ?? true ? 'Please enter frequency' : null,
+          value?.isEmpty ?? true ? 'Please enter a frequency' : null,
+      style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface),
+    );
+  }
+
+  Widget _buildTimeField(ColorScheme colorScheme, TextTheme textTheme) {
+    return TextFormField(
+      controller: _timeController,
+      decoration: InputDecoration(
+        labelText: 'Time',
+        border: const OutlineInputBorder(),
+        filled: true,
+        fillColor: colorScheme.surface.withAlpha((0.95 * 255).toInt()),
+        prefixIcon: Icon(Icons.timer,
+            color: colorScheme.onSurface.withAlpha((0.7 * 255).toInt())),
+        labelStyle: textTheme.labelLarge
+            ?.copyWith(color: colorScheme.onSurface.withAlpha((0.7 * 255).toInt())),
+        focusedBorder: OutlineInputBorder(
+          borderSide: BorderSide(color: colorScheme.primary),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderSide: BorderSide(
+              color: colorScheme.outline.withAlpha((0.4 * 255).toInt())),
+        ),
+      ),
+      validator: (value) =>
+          value?.isEmpty ?? true ? 'Please enter a time' : null,
       style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface),
     );
   }
@@ -217,9 +404,12 @@ class ExerciseScreenState extends State<ExerciseScreen> {
                   style: OutlinedButton.styleFrom(
                     backgroundColor: colorScheme.surface,
                     foregroundColor: colorScheme.onSurface,
-                    side: BorderSide(color: colorScheme.outline.withAlpha((0.5 * 255).toInt())),
+                    side: BorderSide(
+                        color: colorScheme.outline.withAlpha((0.5 * 255).toInt())),
                   ),
-                  child: Text('Cancel', style: textTheme.labelLarge?.copyWith(color: colorScheme.onSurface)),
+                  child: Text('Cancel',
+                      style: textTheme.labelLarge
+                          ?.copyWith(color: colorScheme.onSurface)),
                 ),
               ),
               const SizedBox(width: 10),
@@ -230,7 +420,9 @@ class ExerciseScreenState extends State<ExerciseScreen> {
                     backgroundColor: colorScheme.primary,
                     foregroundColor: colorScheme.onPrimary,
                   ),
-                  child: Text('Add Exercise', style: textTheme.labelLarge?.copyWith(color: colorScheme.onPrimary)),
+                  child: Text('Add Exercise',
+                      style: textTheme.labelLarge
+                          ?.copyWith(color: colorScheme.onPrimary)),
                 ),
               ),
             ],
@@ -238,30 +430,38 @@ class ExerciseScreenState extends State<ExerciseScreen> {
   }
 
   Widget _buildExerciseList(ColorScheme colorScheme, TextTheme textTheme) {
-    if (_databaseService == null) {
-      return Center(child: CircularProgressIndicator(color: colorScheme.primary));
+    if (_exerciseStream == null) {
+      return Center(
+          child: CircularProgressIndicator(color: colorScheme.primary));
     }
 
     return StreamBuilder<QuerySnapshot>(
-      stream: _databaseService!.exercisesStream,
+      stream: _exerciseStream,
       builder: (context, snapshot) {
         if (snapshot.hasError) {
-          return Center(child: Text('Error loading exercises', style: textTheme.bodyLarge?.copyWith(color: colorScheme.error)));
+          return Center(
+              child: Text('Error loading exercises',
+                  style: textTheme.bodyLarge
+                      ?.copyWith(color: colorScheme.error)));
         }
         if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: CircularProgressIndicator(color: colorScheme.primary));
+          return Center(
+              child: CircularProgressIndicator(color: colorScheme.primary));
         }
         final exercises = snapshot.data?.docs ?? [];
         if (exercises.isEmpty) {
           return _buildEmptyState(colorScheme, textTheme);
         }
         return ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
           padding: const EdgeInsets.all(16),
           itemCount: exercises.length,
           itemBuilder: (context, index) {
             final exercise = exercises[index];
             final data = exercise.data() as Map<String, dynamic>;
-            return _buildExerciseCard(exercise.id, data, colorScheme, textTheme);
+            return _buildExerciseCard(
+                exercise.id, data, colorScheme, textTheme);
           },
         );
       },
@@ -269,19 +469,32 @@ class ExerciseScreenState extends State<ExerciseScreen> {
   }
 
   Widget _buildEmptyState(ColorScheme colorScheme, TextTheme textTheme) {
+    String message = 'No exercises found.';
+    String subMessage = 'Add new exercises or check your surgery type settings.';
+
+    if (_surgeryType != null && _surgeryType!.isNotEmpty) {
+      message = 'No specific exercises found for your surgery type: $_surgeryType.';
+      subMessage = 'Showing general recovery exercises or add new ones.';
+    } else {
+      message = 'No general exercises found.';
+      subMessage = 'Add new exercises to get started.';
+    }
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.fitness_center, size: 64, color: colorScheme.onSurface.withAlpha((0.5 * 255).toInt())),
+          Icon(Icons.fitness_center,
+              size: 64, color: colorScheme.onSurface.withAlpha((0.5 * 255).toInt())),
           const SizedBox(height: 16),
           Text(
-            'No exercises added yet',
+            message,
             style: textTheme.titleMedium?.copyWith(color: colorScheme.onSurface),
+            textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
           Text(
-            'Tap the + button to add your first exercise',
+            subMessage,
             textAlign: TextAlign.center,
             style: textTheme.bodyMedium?.copyWith(
               color: colorScheme.onSurface.withAlpha((0.7 * 255).toInt()),
@@ -298,52 +511,83 @@ class ExerciseScreenState extends State<ExerciseScreen> {
     ColorScheme colorScheme,
     TextTheme textTheme,
   ) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 12),
-      elevation: 2,
-      color: colorScheme.surface,
-      child: ListTile(
-        leading: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: colorScheme.surface.withAlpha((0.95 * 255).toInt()),
-            shape: BoxShape.circle,
-            border: Border.all(
+    final Timestamp? lastCompletedTimestamp = data['lastCompletedDate'];
+    final DateTime? lastCompletedDate = lastCompletedTimestamp?.toDate();
+    final bool isCompletedToday = lastCompletedDate != null &&
+        lastCompletedDate.year == DateTime.now().year &&
+        lastCompletedDate.month == DateTime.now().month &&
+        lastCompletedDate.day == DateTime.now().day;
+
+    return AnimatedOpacity(
+      opacity: isCompletedToday ? 0.5 : 1.0,
+      duration: const Duration(milliseconds: 300),
+      child: Card(
+        margin: const EdgeInsets.only(bottom: 12),
+        elevation: 2,
+        color: colorScheme.surface,
+        child: ListTile(
+          leading: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: colorScheme.surface.withAlpha((0.95 * 255).toInt()),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: colorScheme.primary,
+                width: 1.5,
+              ),
+            ),
+            child: Icon(
+              Icons.fitness_center,
               color: colorScheme.primary,
-              width: 1.5,
             ),
           ),
-          child: Icon(
-            Icons.fitness_center,
-            color: colorScheme.primary,
-          ),
-        ),
-        title: Text(
-          data['name'] ?? 'Unknown',
-          style: textTheme.titleSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-            color: colorScheme.onSurface,
-          ),
-        ),
-        subtitle: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Duration: ${data['duration'] ?? ''}',
-              style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface.withAlpha((0.8 * 255).toInt())),
+          title: Text(
+            data['title'] ?? 'Unknown',
+            style: textTheme.titleSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: colorScheme.onSurface,
             ),
-            Text(
-              'Frequency: ${data['frequency'] ?? ''}',
-              style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSurface.withAlpha((0.8 * 255).toInt())),
-            ),
-          ],
-        ),
-        trailing: IconButton(
-          icon: Icon(Icons.delete, color: colorScheme.error),
-          onPressed: () => _deleteExercise(docId),
-          tooltip: 'Delete exercise',
+          ),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                data['description'] ?? '',
+                style: textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurface.withAlpha((0.8 * 255).toInt())),
+              ),
+              Text(
+                'Frequency: ${data['frequency'] ?? ''}',
+                style: textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurface.withAlpha((0.8 * 255).toInt())),
+              ),
+              Text(
+                'Time: ${data['time'] ?? ''}',
+                style: textTheme.bodyMedium?.copyWith(
+                    color: colorScheme.onSurface.withAlpha((0.8 * 255).toInt())),
+              ),
+            ],
+          ),
+          trailing: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Checkbox(
+                value: isCompletedToday,
+                onChanged: (bool? newValue) {
+                  if (newValue != null) {
+                    _toggleExerciseCompletion(docId, newValue);
+                  } 
+                },
+                activeColor: colorScheme.primary,
+              ),
+              IconButton(
+                icon: Icon(Icons.delete, color: colorScheme.error),
+                onPressed: () => _deleteExercise(docId),
+                tooltip: 'Delete exercise',
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -365,65 +609,75 @@ class ExerciseScreenState extends State<ExerciseScreen> {
 
   Future<void> _addExercise() async {
     if (_user == null || _databaseService == null) {
-      print("ExerciseScreen: User not authenticated or _databaseService is null. Cannot add exercise.");
       return;
     }
     setState(() => _isLoading = true);
     try {
-      print("ExerciseScreen: Attempting to add exercise: ${_exerciseNameController.text.trim()}");
       await _databaseService!.addExercise(
-        _exerciseNameController.text.trim(),
-        _durationController.text.trim(),
+        _titleController.text.trim(),
+        _descriptionController.text.trim(),
+        _selectedCategory!,
+        _surgeryType ?? 'General',
         _frequencyController.text.trim(),
+        _timeController.text.trim(),
       );
       _showSuccess('Exercise added successfully!');
       _resetForm();
-      print("ExerciseScreen: Exercise added and form reset.");
-    } catch (error, stackTrace) {
-      print("ExerciseScreen: Failed to add exercise: $error\n$stackTrace");
+    } catch (error) {
       _showError('Failed to add exercise: $error');
     } finally {
-      setState(() => _isLoading = false);
-      print("ExerciseScreen: _addExercise finished. isLoading set to false.");
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
   }
 
   Future<void> _deleteExercise(String docId) async {
     if (_user == null || _databaseService == null) {
-      print("ExerciseScreen: User not authenticated or _databaseService is null. Cannot delete exercise.");
       return;
     }
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         backgroundColor: Theme.of(context).colorScheme.surface,
-        title: Text('Delete Exercise', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Theme.of(context).colorScheme.onSurface)),
-        content: Text('Are you sure you want to delete this exercise?', style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurface)),
+        title: Text('Delete Exercise',
+            style: Theme.of(context)
+                .textTheme
+                .titleMedium
+                ?.copyWith(color: Theme.of(context).colorScheme.onSurface)),
+        content: Text('Are you sure you want to delete this exercise?',
+            style: Theme.of(context)
+                .textTheme
+                .bodyMedium
+                ?.copyWith(color: Theme.of(context).colorScheme.onSurface)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
             style: TextButton.styleFrom(
               foregroundColor: Theme.of(context).colorScheme.primary,
             ),
-            child: Text('Cancel', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: Theme.of(context).colorScheme.primary)),
+            child: Text('Cancel',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    color: Theme.of(context).colorScheme.primary)),
           ),
           TextButton(
             onPressed: () async {
               Navigator.pop(context);
               try {
-                print("ExerciseScreen: Attempting to delete exercise with docId: $docId");
                 await _databaseService!.deleteExercise(docId);
                 _showSuccess('Exercise deleted successfully');
-                print("ExerciseScreen: Exercise deleted successfully.");
-              } catch (error, stackTrace) {
-                print("ExerciseScreen: Failed to delete exercise: $error\n$stackTrace");
+              } catch (error) {
                 _showError('Failed to delete exercise: $error');
               }
             },
             style: TextButton.styleFrom(
               foregroundColor: Theme.of(context).colorScheme.error,
             ),
-            child: Text('Delete', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: Theme.of(context).colorScheme.error)),
+            child: Text('Delete',
+                style: Theme.of(context)
+                    .textTheme
+                    .labelLarge
+                    ?.copyWith(color: Theme.of(context).colorScheme.error)),
           ),
         ],
       ),
@@ -454,18 +708,38 @@ class ExerciseScreenState extends State<ExerciseScreen> {
     );
   }
 
+  Future<void> _toggleExerciseCompletion(String docId, bool newValue) async {
+    if (_user == null || _databaseService == null) {
+      return;
+    }
+    try {
+      DateTime? lastCompletedDate = newValue ? DateTime.now() : null;
+      await _databaseService!.updateExerciseStatus(docId, lastCompletedDate);
+      _showSuccess(newValue ? 'Exercise marked as completed!' : 'Exercise marked as incomplete!');
+    } catch (error) {
+      _showError('Failed to update exercise status: $error');
+    }
+  }
+
   void _resetForm() {
-    _exerciseNameController.clear();
-    _durationController.clear();
+    _titleController.clear();
+    _descriptionController.clear();
     _frequencyController.clear();
-    setState(() => _showForm = false);
+    _timeController.clear();
+    if (mounted) {
+      setState(() {
+        _showForm = false;
+        _selectedCategory = null;
+      });
+    }
   }
 
   @override
   void dispose() {
-    _exerciseNameController.dispose();
-    _durationController.dispose();
+    _titleController.dispose();
+    _descriptionController.dispose();
     _frequencyController.dispose();
+    _timeController.dispose();
     super.dispose();
   }
 }

@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:google_mlkit_text_recognition/google_mlkit_text_recognition.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:recoveryplus/services/database_service.dart';
+import 'package:recoveryplus/services/notification_service.dart';
+import 'package:recoveryplus/screens/medication_screen.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -108,46 +109,22 @@ class _ChatScreenState extends State<ChatScreen> {
     setState(() {
       _messages.add({
         'sender': 'bot',
-        'text': 'Processing prescription image...', 
+        'text': 'Processing prescription image...',
       });
     });
 
     try {
-      final textRecognizer = TextRecognizer(script: TextRecognitionScript.latin);
-      final InputImage inputImage = InputImage.fromFilePath(image.path);
-      print("ChatScreen: Starting text recognition...");
-      final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
-      String extractedText = recognizedText.text;
-      print("ChatScreen: Text recognized: $extractedText");
-
-      if (extractedText.isEmpty) {
-        print("ChatScreen: No text found in the image.");
-        setState(() {
-          _messages.add({
-            'sender': 'bot',
-            'text': 'No text found in the image. Please try again with a clearer image.',
-          });
-        });
-        return;
-      }
-
-      setState(() {
-        _messages.add({
-          'sender': 'bot',
-          'text': 'Text extracted. Sending to Gemini for structuring...', 
-        });
-      });
-
       final String backendUrl = dotenv.env['BACKEND_URL']!;
       print("ChatScreen: Calling Python backend at $backendUrl/process_prescription...");
-      final response = await http.post(
-        Uri.parse('$backendUrl/process_prescription'),
-        headers: {"Content-Type": "application/json"},
-        body: jsonEncode({"prescription_text": extractedText}),
-      );
+      
+      var request = http.MultipartRequest('POST', Uri.parse('$backendUrl/process_prescription'));
+      request.files.add(await http.MultipartFile.fromPath('image', image.path));
+
+      final response = await request.send();
 
       if (response.statusCode == 200) {
-        final Map<String, dynamic> structuredData = jsonDecode(response.body);
+        final responseBody = await response.stream.bytesToString();
+        final Map<String, dynamic> structuredData = jsonDecode(responseBody);
         print("ChatScreen: Backend call successful. Structured Data: $structuredData");
 
         final List<dynamic> medicationsData = structuredData['medications'] ?? [];
@@ -155,22 +132,41 @@ class _ChatScreenState extends State<ChatScreen> {
 
         for (var medData in medicationsData) {
           if (_databaseService != null) {
-            await _databaseService!.addMedication(
+            final docId = await _databaseService!.addMedication(
               medData['name'] ?? '',
               medData['dosage'] ?? '',
-              medData['frequency'] ?? '',
+              (medData['timings'] as List<dynamic>).cast<String>(),
             );
             print("ChatScreen: Medication added to Firebase: ${medData['name']}");
+
+            final List<String> timings = (medData['timings'] as List<dynamic>).cast<String>();
+            for (var timeString in timings) {
+              final timeParts = timeString.split(':');
+              if (timeParts.length == 2) {
+                final hour = int.tryParse(timeParts[0]);
+                final minute = int.tryParse(timeParts[1]);
+                if (hour != null && minute != null) {
+                  final time = TimeOfDay(hour: hour, minute: minute);
+                  await NotificationService().scheduleMedicationReminder(
+                    id: '$docId-$timeString'.hashCode,
+                    medicationName: medData['name'] ?? '',
+                    dosage: medData['dosage'] ?? '',
+                    time: time,
+                  );
+                }
+              }
+            }
           }
         }
 
         for (var exData in exercisesData) {
           if (_databaseService != null) {
-            await _databaseService!.addExercise(
-              exData['name'] ?? '',
-              exData['duration'] ?? '',
-              exData['frequency'] ?? '',
-            );
+            // await _databaseService!.addExercise(
+            //   exData['name'] ?? '',
+            //   exData['duration'] ?? '',
+            //   exData['frequency'] ?? '',
+            //   exData['category'] ?? '',
+            // );
             print("ChatScreen: Exercise added to Firebase: ${exData['name']}");
           }
         }
@@ -179,7 +175,7 @@ class _ChatScreenState extends State<ChatScreen> {
         if (medicationsData.isNotEmpty) {
           confirmationMessage += "Medications:\n";
           for (var med in medicationsData) {
-            confirmationMessage += "- ${med['name']} (${med['dosage']}) - ${med['frequency']}\n";
+            confirmationMessage += "- ${med['name']} (${med['dosage']}) - ${(med['timings'] as List<dynamic>).join(', ')}\n";
           }
         }
         if (exercisesData.isNotEmpty) {
@@ -196,14 +192,20 @@ class _ChatScreenState extends State<ChatScreen> {
             'text': confirmationMessage,
           });
         });
+        // Add navigation to MedicationScreen
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (context) => MedicationScreen()),
+        );
         print("ChatScreen: Prescription processed successfully. Confirmation message sent.");
 
       } else {
-        print("ChatScreen: Backend Error: Status Code ${response.statusCode}, Body: ${response.body}");
+        final responseBody = await response.stream.bytesToString();
+        print("ChatScreen: Backend Error: Status Code ${response.statusCode}, Body: $responseBody");
         setState(() {
           _messages.add({
             'sender': 'bot',
-            'text': 'Error processing prescription: ${response.statusCode} - ${response.body}',
+            'text': 'Error processing prescription: ${response.statusCode} - $responseBody',
           });
         });
       }

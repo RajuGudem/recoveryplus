@@ -155,6 +155,44 @@ class StatisticsService {
     final totalExercises = exercises.length;
     final completionRate = (completedExercises / totalExercises * 100);
 
+    final exercisesByCategory = <String, int>{};
+    final exercisesBySurgeryType = <String, int>{};
+    int totalTime = 0;
+
+    for (var ex in exercises) {
+      if (ex['completed'] == true) {
+        final category = ex['category'] as String?;
+        if (category != null) {
+          exercisesByCategory[category] = (exercisesByCategory[category] ?? 0) + 1;
+        }
+
+        final surgeryType = ex['surgeryType'] as String?;
+        if (surgeryType != null) {
+          exercisesBySurgeryType[surgeryType] = (exercisesBySurgeryType[surgeryType] ?? 0) + 1;
+        }
+
+        final time = ex['time'] as String?;
+        if (time != null) {
+          final timeParts = time.split(' ');
+          if (timeParts.length == 2) {
+            final value = int.tryParse(timeParts[0]);
+            if (value != null) {
+              if (timeParts[1].toLowerCase().startsWith('min')) {
+                totalTime += value;
+              } else if (timeParts[1].toLowerCase().startsWith('hr')) {
+                totalTime += value * 60;
+              }
+            }
+          }
+        }
+      }
+    }
+
+    String? mostFrequentCategory;
+    if (exercisesByCategory.isNotEmpty) {
+      mostFrequentCategory = exercisesByCategory.entries.reduce((a, b) => a.value > b.value ? a : b).key;
+    }
+
     return {
       'total_exercises': totalExercises,
       'completed_exercises': completedExercises,
@@ -167,6 +205,10 @@ class StatisticsService {
           : completionRate >= 50
           ? 'Fair'
           : 'Needs Improvement',
+      'exercises_by_category': exercisesByCategory,
+      'most_frequent_category': mostFrequentCategory,
+      'exercises_by_surgery_type': exercisesBySurgeryType,
+      'total_time_minutes': totalTime,
     };
   }
 
