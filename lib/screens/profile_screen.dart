@@ -6,6 +6,7 @@ import 'package:recoveryplus/services/auth_service.dart';
 import 'package:provider/provider.dart';
 import 'package:recoveryplus/providers/theme_provider.dart';
 import 'package:recoveryplus/services/export_service.dart';
+import 'package:recoveryplus/screens/auth_screen.dart'; // Added import
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -73,7 +74,7 @@ class _RealProfileScreenState extends State<ProfileScreen> {
     try {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Preparing your data export...', style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSecondary)), backgroundColor: colorScheme.secondary));
+      ).showSnackBar(SnackBar(content: Text('Preparing your data export...', style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSecondary)), backgroundColor: colorScheme.secondary, duration: const Duration(seconds: 3)));
 
       await ExportService.exportData();
 
@@ -81,6 +82,7 @@ class _RealProfileScreenState extends State<ProfileScreen> {
         SnackBar(
           content: Text('Data exported successfully!', style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSecondary)),
           backgroundColor: colorScheme.secondary,
+          duration: const Duration(seconds: 3),
         ),
       );
     } catch (error) {
@@ -88,6 +90,7 @@ class _RealProfileScreenState extends State<ProfileScreen> {
         SnackBar(
           content: Text('Export failed: $error', style: textTheme.bodyMedium?.copyWith(color: colorScheme.onError)),
           backgroundColor: colorScheme.error,
+          duration: const Duration(seconds: 5),
         ),
       );
     }
@@ -99,7 +102,7 @@ class _RealProfileScreenState extends State<ProfileScreen> {
     try {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Preparing pain data export...', style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSecondary)), backgroundColor: colorScheme.secondary));
+      ).showSnackBar(SnackBar(content: Text('Preparing pain data export...', style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSecondary)), backgroundColor: colorScheme.secondary, duration: const Duration(seconds: 3)));
 
       await ExportService.exportPainData();
 
@@ -107,6 +110,7 @@ class _RealProfileScreenState extends State<ProfileScreen> {
         SnackBar(
           content: Text('Pain data exported successfully!', style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSecondary)),
           backgroundColor: colorScheme.secondary,
+          duration: const Duration(seconds: 3),
         ),
       );
     } catch (error) {
@@ -114,6 +118,7 @@ class _RealProfileScreenState extends State<ProfileScreen> {
         SnackBar(
           content: Text('Export failed: $error', style: textTheme.bodyMedium?.copyWith(color: colorScheme.onError)),
           backgroundColor: colorScheme.error,
+          duration: const Duration(seconds: 5),
         ),
       );
     }
@@ -124,7 +129,7 @@ class _RealProfileScreenState extends State<ProfileScreen> {
     final textTheme = Theme.of(context).textTheme;
     try {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Preparing medication data export...', style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSecondary)), backgroundColor: colorScheme.secondary),
+        SnackBar(content: Text('Preparing medication data export...', style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSecondary)), backgroundColor: colorScheme.secondary, duration: const Duration(seconds: 3)),
       );
 
       await ExportService.exportMedicationData();
@@ -133,6 +138,7 @@ class _RealProfileScreenState extends State<ProfileScreen> {
         SnackBar(
           content: Text('Medication data exported successfully!', style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSecondary)),
           backgroundColor: colorScheme.secondary,
+          duration: const Duration(seconds: 3),
         ),
       );
     } catch (error) {
@@ -140,6 +146,7 @@ class _RealProfileScreenState extends State<ProfileScreen> {
         SnackBar(
           content: Text('Export failed: $error', style: textTheme.bodyMedium?.copyWith(color: colorScheme.onError)),
           backgroundColor: colorScheme.error,
+          duration: const Duration(seconds: 5),
         ),
       );
     }
@@ -518,6 +525,7 @@ class _RealProfileScreenState extends State<ProfileScreen> {
           SnackBar(
             content: Text('Profile updated successfully!', style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSecondary)),
             backgroundColor: colorScheme.secondary,
+            duration: const Duration(seconds: 3),
           ),
         );
       } catch (error) {
@@ -525,6 +533,7 @@ class _RealProfileScreenState extends State<ProfileScreen> {
           SnackBar(
             content: Text('Failed to update profile: $error', style: textTheme.bodyMedium?.copyWith(color: colorScheme.onError)),
             backgroundColor: colorScheme.error,
+            duration: const Duration(seconds: 5),
           ),
         );
       } finally {
@@ -625,11 +634,15 @@ class _RealProfileScreenState extends State<ProfileScreen> {
               child: Text('Cancel'),
             ),
             TextButton(
-              onPressed: () {
+              onPressed: () async {
                 debugPrint('[ProfileScreen] User confirmed logout. Signing out...');
-                authService.signOut();
-                Navigator.pop(context);
-                debugPrint('[ProfileScreen] Sign out call completed.');
+                await authService.signOut();
+                Navigator.of(context).pop(); // Close the dialog
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (context) => AuthScreen()),
+                  (Route<dynamic> route) => false,
+                );
+                debugPrint('[ProfileScreen] Sign out call completed and navigated to AuthScreen.');
               },
               style: TextButton.styleFrom(
                 foregroundColor: colorScheme.error,

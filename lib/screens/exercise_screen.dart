@@ -692,6 +692,7 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
         backgroundColor: colorScheme.secondary,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 3),
       ),
     );
   }
@@ -704,6 +705,7 @@ class _ExerciseScreenState extends State<ExerciseScreen> {
         backgroundColor: colorScheme.error,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 5),
       ),
     );
   }

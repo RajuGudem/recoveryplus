@@ -50,7 +50,7 @@ class StatisticsScreenState extends State<StatisticsScreen> {
     try {
       ScaffoldMessenger.of(
         context,
-      ).showSnackBar(SnackBar(content: Text('Preparing statistics report...', style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSecondary)), backgroundColor: colorScheme.secondary));
+      ).showSnackBar(SnackBar(content: Text('Preparing statistics report...', style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSecondary)), backgroundColor: colorScheme.secondary, duration: const Duration(seconds: 3)));
 
       await ExportService.exportStatisticsReport();
 
@@ -58,6 +58,7 @@ class StatisticsScreenState extends State<StatisticsScreen> {
         SnackBar(
           content: Text('Statistics report exported successfully!', style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSecondary)),
           backgroundColor: colorScheme.secondary,
+          duration: const Duration(seconds: 3),
         ),
       );
     } catch (error) {
@@ -65,6 +66,7 @@ class StatisticsScreenState extends State<StatisticsScreen> {
         SnackBar(
           content: Text('Export failed: $error', style: textTheme.bodyMedium?.copyWith(color: colorScheme.error)),
           backgroundColor: colorScheme.error,
+          duration: const Duration(seconds: 5),
         ),
       );
     }

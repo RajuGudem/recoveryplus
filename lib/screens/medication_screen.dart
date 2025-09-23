@@ -568,6 +568,7 @@ class MedicationScreenState extends State<MedicationScreen> {
         backgroundColor: colorScheme.secondary,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 3), // Added duration
       ),
     );
   }
@@ -581,6 +582,7 @@ class MedicationScreenState extends State<MedicationScreen> {
         backgroundColor: colorScheme.error,
         behavior: SnackBarBehavior.floating,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        duration: const Duration(seconds: 5), // Added duration, slightly longer for errors
       ),
     );
   }

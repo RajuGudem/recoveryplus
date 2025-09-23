@@ -26,10 +26,12 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   DatabaseService? _databaseService;
+  late final NotificationService _notificationService; // Added NotificationService
 
   @override
   void initState() {
     super.initState();
+    _notificationService = NotificationService(); // Initialize NotificationService
     _initializeDatabaseService();
   }
 
@@ -566,7 +568,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     print("DashboardScreen: Image picked successfully: ${pickedFile.path}");
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Processing prescription...')),
+        const SnackBar(content: Text('Processing prescription...'), duration: Duration(seconds: 3)),
       );
     }
 
@@ -588,17 +590,43 @@ class _DashboardScreenState extends State<DashboardScreen> {
         final List<dynamic> exercisesData = structuredData['exercises'] ?? [];
 
         for (var medData in medicationsData) {
+          print("DashboardScreen: Raw timings data for ${medData['name']} from backend: ${medData['timings']}"); // Moved logging
           if (_databaseService != null) {
-            await _databaseService!.addMedication(
-              medData['name'] ?? '',
-              medData['dosage'] ?? '',
-              (medData['timings'] as List<dynamic>).cast<String>(), // Expect timings directly from backend
+            final medicationName = medData['name'] ?? '';
+            final dosage = medData['dosage'] ?? '';
+            final timings = (medData['timings'] as List<dynamic>?)?.cast<String>() ?? [];
+
+            final docId = await _databaseService!.addMedication(
+              medicationName,
+              dosage,
+              timings,
             );
-            print("DashboardScreen: Medication added to Firebase: ${medData['name']} with timings: ${medData['timings']}");
+            print("DashboardScreen: Medication added to Firebase: $medicationName with timings: $timings");
+
+            for (var timeString in timings) {
+              try {
+                final parts = timeString.split(':');
+                if (parts.length == 2) {
+                  final hour = int.parse(parts[0]);
+                  final minute = int.parse(parts[1]);
+                  final timeOfDay = TimeOfDay(hour: hour, minute: minute);
+
+                  await _notificationService.scheduleBackgroundCompatibleReminder(
+                    docId: docId,
+                    medicationName: medicationName,
+                    dosage: dosage,
+                    time: timeOfDay,
+                  );
+                  print("DashboardScreen: Notification scheduled for $medicationName at $timeString");
+                }
+              } catch (e) {
+                print("DashboardScreen: Error parsing time '$timeString' for notification: $e");
+              }
+            }
           }
         }
 
-        for (var exData in exercisesData) {
+        for (var exData in exercisesData) { // exercisesData is correctly scoped here
           if (_databaseService != null) {
             // await _databaseService!.addExercise(
             //   exData['name'] ?? '',
@@ -613,7 +641,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         if (mounted) {
           setState(() {});
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Prescription processed successfully!')),
+            SnackBar(content: Text('Prescription processed successfully!'), duration: const Duration(seconds: 3)),
           );
           // Add navigation to MedicationScreen
           Navigator.push(
@@ -628,7 +656,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
         print("DashboardScreen: Backend Error: Status Code ${response.statusCode}, Body: $responseBody");
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error processing prescription: ${response.statusCode} - $responseBody')),
+            SnackBar(content: Text('Error processing prescription: ${response.statusCode} - $responseBody'), duration: const Duration(seconds: 5)),
           );
         }
       }
@@ -637,7 +665,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       print("DashboardScreen: Error processing prescription: $e\n$stackTrace");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error processing prescription: $e')),
+          SnackBar(content: Text('Error processing prescription: $e'), duration: const Duration(seconds: 5)),
         );
       }
     }

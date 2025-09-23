@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:recoveryplus/services/auth_service.dart';
 import 'package:recoveryplus/screens/phone_input_screen.dart';
 import 'package:provider/provider.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Added import
+import 'package:recoveryplus/utils/dialog_utils.dart'; // Added import
 
 class AuthScreen extends StatefulWidget {
   @override
@@ -323,11 +325,16 @@ class _AuthScreenState extends State<AuthScreen> {
         }
       } catch (error) {
         debugPrint('[AuthScreen] ❌ Authentication failed: ${error.toString()}');
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Authentication failed: ${error.toString()}', style: TextStyle(color: Theme.of(context).colorScheme.onError)),
-            backgroundColor: Theme.of(context).colorScheme.error, // Theme color
-          ),
+        String errorMessage = 'An unknown error occurred.';
+        if (error is FirebaseAuthException) {
+          errorMessage = error.message ?? errorMessage;
+        } else {
+          errorMessage = error.toString();
+        }
+        DialogUtils.showErrorDialog(
+          context: context,
+          title: 'Authentication Failed',
+          message: errorMessage,
         );
       } finally {
         if (mounted) {

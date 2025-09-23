@@ -170,6 +170,7 @@ class _PainTrackerWidgetState extends State<PainTrackerWidget> {
         SnackBar(
           content: Text('Pain level saved successfully!', style: TextStyle(color: Theme.of(context).colorScheme.onSecondary)),
           backgroundColor: Theme.of(context).colorScheme.secondary,
+          duration: const Duration(seconds: 3),
         ),
       );
 
@@ -184,6 +185,7 @@ class _PainTrackerWidgetState extends State<PainTrackerWidget> {
         SnackBar(
           content: Text('Error: $error', style: TextStyle(color: Theme.of(context).colorScheme.onError)),
           backgroundColor: Theme.of(context).colorScheme.error,
+          duration: const Duration(seconds: 5),
         ),
       );
     } finally {

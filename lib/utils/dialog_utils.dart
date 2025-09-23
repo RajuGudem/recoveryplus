@@ -58,4 +58,30 @@ class DialogUtils {
       ),
     );
   }
+
+  static void showErrorDialog({
+    required BuildContext context,
+    required String title,
+    required String message,
+  }) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.error, color: Theme.of(context).colorScheme.error),
+            SizedBox(width: 8),
+            Text(title),
+          ],
+        ),
+        content: Text(message),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
 }

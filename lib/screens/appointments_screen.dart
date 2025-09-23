@@ -364,6 +364,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
               SnackBar(
                 content: Text('Appointment updated successfully', style: TextStyle(color: Theme.of(context).colorScheme.onSecondary)),
                 backgroundColor: Theme.of(context).colorScheme.secondary,
+                duration: const Duration(seconds: 3),
               ),
             );
           } catch (e) {
@@ -372,6 +373,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
               SnackBar(
                 content: Text('Error updating appointment: ${e.toString()}', style: TextStyle(color: Theme.of(context).colorScheme.onError)),
                 backgroundColor: Theme.of(context).colorScheme.error,
+                duration: const Duration(seconds: 5),
               ),
             );
           }
@@ -381,12 +383,15 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
   }
 
   void _markAsCompleted(Appointment appointment) async {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
     try {
       await AppointmentService.markAsCompleted(appointment.id);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text('Appointment marked as completed', style: TextStyle(color: Theme.of(context).colorScheme.onSecondary)),
-          backgroundColor: Theme.of(context).colorScheme.secondary,
+          content: Text('Appointment status updated!', style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSecondary)),
+          backgroundColor: colorScheme.secondary,
+          duration: const Duration(seconds: 3),
         ),
       );
     } catch (e) {
@@ -427,21 +432,26 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
     );
 
     if (confirmed == true) {
+      final colorScheme = Theme.of(context).colorScheme;
+      final textTheme = Theme.of(context).textTheme;
       try {
         await AppointmentService.deleteAppointment(appointment.id);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Appointment deleted successfully', style: TextStyle(color: colorScheme.onSecondary)),
-            backgroundColor: colorScheme.secondary,
-          ),
-        );
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Appointment deleted successfully', style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSecondary)),
+        backgroundColor: colorScheme.secondary,
+        duration: const Duration(seconds: 3),
+      ),
+    );
       } catch (e) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error deleting appointment: ${e.toString()}', style: TextStyle(color: colorScheme.onError)),
-            backgroundColor: colorScheme.error,
-          ),
-        );
+      final textTheme = Theme.of(context).textTheme;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to delete appointment: ${e.toString()}', style: textTheme.bodyMedium?.copyWith(color: colorScheme.onError)),
+          backgroundColor: colorScheme.error,
+          duration: const Duration(seconds: 5),
+        ),
+      );
       }
     }
   }
@@ -459,16 +469,18 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
             if (appointment.hospitalContact.isNotEmpty) {
               _showWhatsAppRequestDialog(appointment);
             } else {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Appointment added successfully', style: TextStyle(color: Theme.of(context).colorScheme.onSecondary)), backgroundColor: Theme.of(context).colorScheme.secondary),
-              );
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('Appointment added successfully', style: TextStyle(color: Theme.of(context).colorScheme.onSecondary)), backgroundColor: Theme.of(context).colorScheme.secondary, duration: const Duration(seconds: 3)),              );
             }
           } catch (e) {
             Navigator.pop(context);
+            final colorScheme = Theme.of(context).colorScheme;
+            final textTheme = Theme.of(context).textTheme;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Error adding appointment: ${e.toString()}', style: TextStyle(color: Theme.of(context).colorScheme.onError)),
-                backgroundColor: Theme.of(context).colorScheme.error,
+                content: Text('Failed to add appointment: ${e.toString()}', style: textTheme.bodyMedium?.copyWith(color: colorScheme.onError)),
+                backgroundColor: colorScheme.error,
+                duration: const Duration(seconds: 5),
               ),
             );
           }
@@ -510,6 +522,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
                 SnackBar(
                   content: Text('Appointment added successfully', style: TextStyle(color: colorScheme.onSecondary)),
                   backgroundColor: colorScheme.secondary,
+                  duration: const Duration(seconds: 3),
                 ),
               );
             },
@@ -537,6 +550,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
         SnackBar(
           content: Text('No contact number available for this appointment', style: TextStyle(color: colorScheme.onError)),
           backgroundColor: colorScheme.error,
+          duration: const Duration(seconds: 5),
         ),
       );
       return;
@@ -553,6 +567,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
           SnackBar(
             content: Text('Invalid phone number format', style: TextStyle(color: colorScheme.onError)),
             backgroundColor: colorScheme.error,
+            duration: const Duration(seconds: 5),
           ),
         );
         return;
@@ -587,6 +602,7 @@ class _AppointmentsScreenState extends State<AppointmentsScreen> {
         SnackBar(
           content: Text('Error: ${e.toString()}', style: TextStyle(color: colorScheme.onError)),
           backgroundColor: colorScheme.error,
+          duration: const Duration(seconds: 5),
         ),
       );
     }
