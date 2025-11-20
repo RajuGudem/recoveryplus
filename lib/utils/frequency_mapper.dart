@@ -37,6 +37,15 @@ class FrequencyToTimeMapper {
       case 'prn': // Pro Re Nata (as needed)
         return []; // No specific schedule, user will take as needed
 
+      case 'morning':
+        return [const TimeOfDay(hour: 8, minute: 0)]; // 8:00 AM
+      case 'noon':
+        return [const TimeOfDay(hour: 14, minute: 0)]; // 2:00 PM
+      case 'afternoon':
+        return [const TimeOfDay(hour: 14, minute: 0)]; // 2:00 PM
+      case 'night':
+        return [const TimeOfDay(hour: 20, minute: 0)]; // 8:00 PM
+
       // Add more cases for other common frequencies or abbreviations
       // e.g., 'every 4 hours', 'every 6 hours', 'every 8 hours', 'every other day', etc.
       // For now, we'll keep it simple.

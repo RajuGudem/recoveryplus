@@ -1,0 +1,115 @@
+{
+  "Title": [
+    "RecoveryPlus: A Physiotherapy Assistant",
+    "By: [Your Name]",
+    "Project Guide: [Guide's Name]",
+    "[Your Logo/Institution Logo]"
+  ],
+  "Abstract": [
+    "Mobile app for physiotherapy patients.",
+    "Tracks exercises, appointments, and medication.",
+    "Provides progress analytics and reminders.",
+    "Simplifies recovery management.",
+    "Built with Flutter and Firebase."
+  ],
+  "Problem Statement": [
+    "Difficulty in tracking patient progress.",
+    "Poor adherence to exercise schedules.",
+    "Lack of a centralized data platform.",
+    "Manual and inefficient data handling.",
+    "Limited patient engagement in recovery."
+  ],
+  "Objectives": [
+    "Develop a cross-platform mobile app.",
+    "Implement user authentication.",
+    "Enable appointment and medication tracking.",
+    "Provide exercise and progress monitoring.",
+    "Generate recovery statistics and reports."
+  ],
+  "Existing System": [
+    "Manual record-keeping on paper.",
+    "Use of generic calendar/reminder apps.",
+    "Fragmented communication channels.",
+    "No real-time progress tracking.",
+    "Limited data analytics capabilities."
+  ],
+  "Proposed System": [
+    "Centralized patient data management.",
+    "Automated reminders for appointments.",
+    "Interactive exercise tracking module.",
+    "Real-time progress visualization.",
+    "Secure data storage with Firebase."
+  ],
+  "Architecture": [
+    "[Fig. 1: System Architecture Diagram]",
+    "Flutter (Frontend) -> Firebase (Backend)",
+    "UI Layer: Widgets and Screens",
+    "Business Logic: Services and Providers",
+    "Data Layer: Firestore and Local Storage"
+  ],
+  "Methodology/Flowchart": [
+    "[Fig. 2: Application Flowchart]",
+    "User Authentication (Login/Register)",
+    "Dashboard -> Select Module",
+    "Appointments -> Schedule/View",
+    "Exercises -> Track/Update",
+    "Statistics -> View Progress"
+  ],
+  "Modules": [
+    "User Authentication",
+    "Appointment Management",
+    "Medication Tracking",
+    "Exercise Monitoring",
+    "Statistics and Analytics",
+    "Profile Management"
+  ],
+  "Technology Stack": [
+    "Frontend: Flutter",
+    "Backend: Firebase (Auth, Firestore)",
+    "State Management: Provider",
+    "Database: Cloud Firestore",
+    "Notifications: Flutter Local Notifications",
+    "Analytics: Syncfusion Flutter Charts"
+  ],
+  "Algorithms (if any)": [
+    "Pain and recovery progress calculation.",
+    "Statistical data aggregation for charts.",
+    "Optical Character Recognition (OCR):",
+    "  - Google ML Kit for Text Recognition",
+    "  - Extracts text from images"
+  ],
+  "Screenshots": [
+    "[Fig. 3: Login Screen]",
+    "[Fig. 4: Dashboard]",
+    "[Fig. 5: Appointments Screen]",
+    "[Fig. 6: Exercise Tracker]",
+    "[Fig. 7: Statistics Chart]"
+  ],
+  "Results": [
+    "Successfully developed a functional app.",
+    "Achieved real-time data synchronization.",
+    "Positive user feedback on usability.",
+    "Improved patient engagement.",
+    "Demonstrated effective progress tracking."
+  ],
+  "Conclusion": [
+    "RecoveryPlus simplifies physiotherapy.",
+    "Centralized platform for patients.",
+    "Flutter and Firebase are effective.",
+    "Potential to improve patient outcomes.",
+    "Future enhancements can add more value."
+  ],
+  "Future Work": [
+    "Integrate video consultations.",
+    "Add wearable device integration.",
+    "Implement machine learning for predictions.",
+    "Enhance social/community features.",
+    "Expand exercise library with videos."
+  ],
+  "References": [
+    "[1] Flutter Documentation. [Online]. Available: https://flutter.dev",
+    "[2] Firebase Documentation. [Online]. Available: https://firebase.google.com/docs",
+    "[3] Syncfusion Flutter Charts. [Online]. Available: https://pub.dev/packages/syncfusion_flutter_charts",
+    "[4] B. Myers, \"A framework for user interface software,\" Carnegie Mellon University, Tech. Rep., 1995."
+  ]
+}

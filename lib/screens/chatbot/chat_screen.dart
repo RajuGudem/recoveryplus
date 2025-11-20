@@ -7,6 +7,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:recoveryplus/services/database_service.dart';
 import 'package:recoveryplus/services/notification_service.dart';
 import 'package:recoveryplus/screens/medication_screen.dart';
+import 'package:recoveryplus/utils/frequency_mapper.dart';
 
 class ChatScreen extends StatefulWidget {
   const ChatScreen({super.key});
@@ -24,7 +25,7 @@ class _ChatScreenState extends State<ChatScreen> {
     },
   ];
 
-  final String _backendUrl = '${dotenv.env['BACKEND_URL']}/gemini-webhook';
+  final String _backendUrl = '${dotenv.env['BACKEND_URL']}/groq-webhook';
   DatabaseService? _databaseService;
 
   @override
@@ -141,19 +142,14 @@ class _ChatScreenState extends State<ChatScreen> {
 
             final List<String> timings = (medData['timings'] as List<dynamic>).cast<String>();
             for (var timeString in timings) {
-              final timeParts = timeString.split(':');
-              if (timeParts.length == 2) {
-                final hour = int.tryParse(timeParts[0]);
-                final minute = int.tryParse(timeParts[1]);
-                if (hour != null && minute != null) {
-                  final time = TimeOfDay(hour: hour, minute: minute);
-                  await NotificationService().scheduleMedicationReminder(
-                    id: '$docId-$timeString'.hashCode,
-                    medicationName: medData['name'] ?? '',
-                    dosage: medData['dosage'] ?? '',
-                    time: time,
-                  );
-                }
+              final List<TimeOfDay> times = FrequencyToTimeMapper.mapFrequencyToTimes(timeString);
+              for (var time in times) {
+                await NotificationService().scheduleMedicationReminder(
+                  id: '$docId-$timeString-${time.hour}-${time.minute}'.hashCode, // More unique ID
+                  medicationName: medData['name'] ?? '',
+                  dosage: medData['dosage'] ?? '',
+                  time: time,
+                );
               }
             }
           }
@@ -192,12 +188,9 @@ class _ChatScreenState extends State<ChatScreen> {
             'text': confirmationMessage,
           });
         });
-        // Add navigation to MedicationScreen
-        Navigator.push(
-          context,
-          MaterialPageRoute(builder: (context) => MedicationScreen()),
-        );
-        print("ChatScreen: Prescription processed successfully. Confirmation message sent.");
+        // Pop the current screen to return to the home screen
+        Navigator.pop(context);
+        print("ChatScreen: Prescription processed successfully. Popping back to home screen.");
 
       } else {
         final responseBody = await response.stream.bytesToString();
